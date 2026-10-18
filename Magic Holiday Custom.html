@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Magic Holiday Bus - Grammar Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        /* Strict No-Scroll Layout */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden; /* Prevents smartboard scrolling issues */
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(180deg, #7dd3fc 0%, #bae6fd 50%, #fde047 100%);
+            transition: background-color 0.3s;
+        }
+
+        .bg-red-flash {
+            background: #7f1d1d !important;
+        }
+
+        /* 3D Button Effects */
+        .btn-3d {
+            transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.1s;
+        }
+        .btn-3d:active {
+            transform: translateY(6px) !important;
+            box-shadow: 0 0px 0 transparent !important;
+        }
+
+        /* Bus Animation Classes */
+        .bus-hidden {
+            transform: translateX(-120vw);
+        }
+        .bus-visible {
+            transform: translateX(0);
+        }
+        .bus-exit {
+            transform: translateX(120vw);
+        }
+
+        /* Floating animation for start screen */
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(3deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+
+        /* Animated Answer Choices */
+        @keyframes bounceInUp {
+            0% { opacity: 0; transform: translateY(50px) scale(0.9); }
+            70% { opacity: 1; transform: translateY(-10px) scale(1.02); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-choice {
+            opacity: 0; /* Start hidden */
+            animation: bounceInUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Correct pulse */
+        @keyframes correct-pulse {
+            0% { transform: scale(1); background-color: #4ade80; }
+            50% { transform: scale(1.05); background-color: #22c55e; }
+            100% { transform: scale(1); background-color: #4ade80; }
+        }
+        .correct-anim {
+            animation: correct-pulse 0.5s ease;
+            box-shadow: 0 6px 0 #166534 !important;
+            border-color: #166534 !important;
+            color: white !important;
+            background-color: #22c55e !important;
+        }
+
+        /* Shake for wrong answer */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); background-color: #f87171; }
+            25% { transform: translateX(-15px); }
+            50% { transform: translateX(15px); }
+            75% { transform: translateX(-15px); }
+        }
+        .wrong-anim {
+            animation: shake 0.5s ease;
+            box-shadow: 0 6px 0 #7f1d1d !important;
+            border-color: #7f1d1d !important;
+            color: white !important;
+            background-color: #dc2626 !important;
+        }
+
+        /* Firework particles */
+        .particle {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            animation: explode 1s ease-out forwards;
+        }
+        @keyframes explode {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+
+        /* Active Team Highlight */
+        .active-team {
+            transform: scale(1.15);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.8);
+            border-width: 4px;
+            border-color: #fbbf24 !important;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="flex flex-col">
+
+    <!-- Audio Element for BGM -->
+    <audio id="bgm" src="https://raw.githubusercontent.com/wnadm9/AstroBot/7d67306bc29cb8c8f356ed24a6d178513506f2db/Astro's%20Playroom%20OST%20-%2005%20Follow%20Me%20(Into%20The%20Storm)%20%5BPlayroom%20Remix%5D%20-%20(192%20Kbps).mp3" loop></audio>
+
+    <!-- TOP BAR (Scoreboard & Penalty) - Fixed height -->
+    <div id="top-bar" class="hidden flex-shrink-0 w-full p-2 relative z-20">
+        <div class="max-w-7xl mx-auto flex flex-col gap-2">
+            <div class="flex justify-between items-center px-4">
+                <div class="flex gap-2">
+                    <button onclick="openPenaltyModal()" class="btn-3d bg-red-600 hover:bg-red-500 text-white font-black text-lg py-1 px-4 rounded-full border-2 border-red-800 shadow-[0_4px_0_#7f1d1d]">
+                        🤫 NOISY!
+                    </button>
+                    <button onclick="showEndScreen()" class="btn-3d bg-purple-600 hover:bg-purple-500 text-white font-black text-lg py-1 px-4 rounded-full border-2 border-purple-800 shadow-[0_4px_0_#581c87]">
+                        ⏳ TIME'S UP
+                    </button>
+                </div>
+                <div id="turn-indicator" class="text-xl font-black text-blue-800 bg-white/50 px-4 py-1 rounded-full border-2 border-white/80 backdrop-blur-sm">
+                    Turn: <span id="current-turn-name">Sun ☀️</span>
+                </div>
+            </div>
+            
+            <div id="scoreboard" class="flex justify-center gap-2 md:gap-4 px-2">
+                <!-- Teams injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT AREA - Takes up remaining height -->
+    <div id="main-content" class="flex-grow flex items-center justify-center relative z-10 p-4 overflow-hidden">
+        
+        <!-- START SCREEN -->
+        <div id="screen-start" class="flex flex-col items-center justify-center text-center">
+            <div class="text-[10vh] mb-2 animate-float leading-none">🚌</div>
+            <h1 class="text-[6vh] md:text-[8vh] font-black text-amber-500 mb-2 drop-shadow-lg tracking-wide leading-tight">The Magic<br>Holiday Bus</h1>
+            <p class="text-[3vh] md:text-[4vh] text-blue-600 mb-8 font-black bg-white/50 px-6 py-2 rounded-full border-4 border-white">Grammar Adventure!</p>
+            <button onclick="startGame()" class="btn-3d bg-green-500 hover:bg-green-400 text-white font-black text-[4vh] py-4 px-12 rounded-3xl border-4 border-green-700 shadow-[0_8px_0_#15803d]">
+                START GAME
+            </button>
+        </div>
+
+        <!-- GRID SELECTION SCREEN -->
+        <div id="screen-grid" class="hidden flex-col items-center justify-center w-full max-w-6xl">
+            <div class="bg-white/80 backdrop-blur-md rounded-3xl p-6 border-4 border-white shadow-xl w-full">
+                <h2 class="text-3xl font-black text-center text-blue-700 mb-6 drop-shadow-sm">Pick a Question! 🏖️</h2>
+                <!-- 14 Questions Grid: 2 rows of 7 to fit smartboards well -->
+                <div id="question-grid" class="grid grid-cols-7 gap-3 md:gap-4 w-full h-[50vh]">
+                    <!-- Grid buttons injected via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- QUESTION SCREEN (BUS ANIMATION) -->
+        <div id="screen-question" class="hidden flex-col items-center justify-center w-full relative">
+            <div id="bus-wrapper" class="w-full flex items-center justify-center transition-transform duration-700 ease-in-out bus-hidden">
+                
+                <div class="bg-blue-50 border-8 border-blue-400 rounded-3xl p-6 w-full max-w-4xl shadow-2xl relative flex flex-col md:flex-row gap-6 items-center">
+                    
+                    <!-- The Bus Emoji -->
+                    <div class="text-[8vh] md:text-[12vh] drop-shadow-xl animate-float flex-shrink-0">🚌</div>
+                    
+                    <div class="flex-grow w-full">
+                        <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-amber-400 text-amber-900 font-black px-6 py-1 rounded-full border-4 border-white shadow-md text-xl">
+                            Question <span id="q-number">X</span>
+                        </div>
+                        
+                        <h2 id="question-text" class="text-2xl md:text-4xl text-gray-800 font-black leading-tight mt-4 mb-6">
+                            <!-- Question Text Here -->
+                        </h2>
+
+                        <div id="choices-container" class="flex flex-col gap-3">
+                            <!-- Choices Here (Animated in) -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- END SCREEN -->
+        <div id="screen-end" class="hidden flex-col items-center justify-center text-center">
+            <div class="text-[12vh] mb-4 animate-float">🏆</div>
+            <h2 class="text-[6vh] font-black text-amber-500 mb-4 drop-shadow-md">Holiday Complete!</h2>
+            <div class="bg-yellow-100 border-4 border-yellow-400 p-6 rounded-3xl mb-8">
+                <p class="text-[3vh] text-gray-700 font-black mb-2">The Winning Team is:</p>
+                <p id="final-winner" class="text-[5vh] text-green-600 font-black drop-shadow-sm">Team!</p>
+            </div>
+            <div class="flex gap-4 flex-wrap justify-center">
+                <button onclick="replayGame()" class="btn-3d bg-green-500 hover:bg-green-400 text-white font-black text-2xl py-4 px-8 rounded-2xl border-4 border-green-700 shadow-[0_8px_0_#15803d]">
+                    Replay (Keep Scores) 🔄
+                </button>
+                <button onclick="location.reload()" class="btn-3d bg-blue-500 hover:bg-blue-400 text-white font-black text-2xl py-4 px-8 rounded-2xl border-4 border-blue-700 shadow-[0_8px_0_#1d4ed8]">
+                    New Game 🆕
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PENALTY MODAL -->
+    <div id="penalty-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex-col items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-3xl max-w-3xl w-full text-center border-8 border-red-500 shadow-2xl transform scale-100">
+            <div class="text-6xl mb-2">🤫</div>
+            <h3 class="text-4xl font-black text-red-600 mb-2">TOO NOISY!</h3>
+            <p class="text-xl font-bold text-gray-600 mb-6">-1 Point. Select a team to penalize:</p>
+            <div id="penalty-buttons" class="flex flex-wrap justify-center gap-3 mb-6">
+                <!-- Team buttons -->
+            </div>
+            <button onclick="applyPenalty('ALL')" class="btn-3d px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl border-b-4 border-red-800 font-black text-xl w-full mb-3 shadow-[0_4px_0_#7f1d1d]">MINUS ALL TEAMS!</button>
+            <button onclick="closePenaltyModal()" class="px-8 py-2 font-bold text-xl text-gray-500 hover:text-gray-800 underline">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const teamsData = [
+            { name: "Sun ☀️", color: "bg-amber-100", border: "border-amber-400", text: "text-amber-700" },
+            { name: "Moon 🌙", color: "bg-slate-100", border: "border-slate-400", text: "text-slate-700" },
+            { name: "Stars ✨", color: "bg-yellow-100", border: "border-yellow-400", text: "text-yellow-700" },
+            { name: "Tree 🌳", color: "bg-green-100", border: "border-green-400", text: "text-green-700" },
+            { name: "River 🌊", color: "bg-blue-100", border: "border-blue-400", text: "text-blue-700" },
+            { name: "Stone 🪨", color: "bg-stone-200", border: "border-stone-500", text: "text-stone-700" },
+            { name: "Flame 🔥", color: "bg-red-100", border: "border-red-400", text: "text-red-700" }
+        ];
+
+        const questions = [
+            { text: "Dave _____ the Holiday Bus to Seaside Bay.", choices: ["took", "taked", "take"], correct: 0 },
+            { text: "The weather _____ sunny and hot.", choices: ["was", "were", "is"], correct: 0 },
+            { text: "Dave _____ a pretty shell in the sand.", choices: ["finded", "found", "find"], correct: 1 },
+            { text: "He wanted to go into the ocean, but he _____.", choices: ["didn't swam", "doesn't swim", "didn't swim"], correct: 2 },
+            { text: "The lifeguard _____ his red whistle.", choices: ["blew", "blowed", "blows"], correct: 0 },
+            { text: "Dave _____ away from the shark as fast as he could.", choices: ["runned", "ran", "run"], correct: 1 },
+            { text: "In the afternoon, Dave's mother _____ him to the town.", choices: ["took", "taked", "takes"], correct: 0 },
+            { text: "They _____ to look at old dinosaur bones.", choices: ["want", "wanted", "wanting"], correct: 1 },
+            { text: "The museum was closed, so they _____ in.", choices: ["didn't go", "didn't went", "don't go"], correct: 0 },
+            { text: "They walked to the shopping centre and _____ postcards.", choices: ["buy", "buyed", "bought"], correct: 2 },
+            { text: "At night, they _____ back to the beach.", choices: ["go", "went", "goed"], correct: 1 },
+            { text: "Dave _____ the shark at night.", choices: ["didn't see", "didn't saw", "doesn't see"], correct: 0 },
+            { text: "They _____ quietly on the sand.", choices: ["walked", "walk", "walking"], correct: 0 },
+            { text: "They _____ at the bright stars in the sky.", choices: ["look", "looked", "looking"], correct: 1 }
+        ].map(q => ({ ...q, answered: false }));
+
+        let teams = [];
+        let currentQuestionIndex = null;
+        let activeTeamIndex = 0;
+        let isAnswering = false;
+        let audioCtx;
+
+        // --- AUDIO SYSTEM ---
+        function initAudio() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                
+                const bgm = document.getElementById('bgm');
+                bgm.volume = 0.25; 
+                bgm.play().catch(e => console.log("BGM error:", e));
+            } catch (e) {}
+        }
+
+        function playTone(freq, type, duration, vol) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+            return { osc, gain };
+        }
+
+        function playCling() { 
+            playTone(880, 'sine', 0.1, 0.3); // A5
+            setTimeout(() => playTone(1760, 'sine', 0.2, 0.2), 50); // A6
+        }
+
+        function playBusSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(60, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 1);
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.2);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.5);
+        }
+
+        function playCorrectSound() {
+            playTone(523.25, 'triangle', 0.15, 0.3); // C5
+            setTimeout(() => playTone(659.25, 'triangle', 0.15, 0.3), 100); // E5
+            setTimeout(() => playTone(783.99, 'triangle', 0.15, 0.3), 200); // G5
+            setTimeout(() => playTone(1046.50, 'triangle', 0.4, 0.5), 300); // C6
+            setTimeout(() => playTone(150, 'square', 0.2, 0.2), 50); // Firework pop
+        }
+
+        function playCreepySound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc2.type = 'triangle';
+            
+            osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 1.5);
+            
+            osc2.frequency.setValueAtTime(310, audioCtx.currentTime);
+            osc2.frequency.exponentialRampToValueAtTime(45, audioCtx.currentTime + 1.5);
+
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+
+            osc.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start(); osc2.start();
+            osc.stop(audioCtx.currentTime + 1.5); osc2.stop(audioCtx.currentTime + 1.5);
+        }
+
+        // --- FIREWORKS ---
+        function createFirework(x, y) {
+            const colors = ['#fbbf24', '#ef4444', '#3b82f6', '#22c55e', '#a855f7'];
+            for(let i=0; i<40; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.width = Math.random() * 12 + 6 + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 80 + Math.random() * 200;
+                particle.style.setProperty('--tx', Math.cos(angle) * velocity + 'px');
+                particle.style.setProperty('--ty', Math.sin(angle) * velocity + 'px');
+                
+                document.body.appendChild(particle);
+                setTimeout(() => particle.remove(), 1000);
+            }
+        }
+
+        // --- UI LOGIC ---
+        function startGame() {
+            initAudio();
+            playCling();
+            teams = teamsData.map(t => ({...t, score: 0}));
+            activeTeamIndex = 0;
+            
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('top-bar').classList.remove('hidden');
+            document.getElementById('screen-grid').classList.replace('hidden', 'flex');
+            
+            updateScoreboard();
+            renderGrid();
+        }
+
+        function replayGame() {
+            playCling();
+            questions.forEach(q => q.answered = false); // Reset questions
+            
+            document.getElementById('screen-end').classList.replace('flex', 'hidden');
+            document.getElementById('top-bar').classList.remove('hidden');
+            document.getElementById('screen-grid').classList.replace('hidden', 'flex');
+            
+            updateScoreboard();
+            renderGrid();
+        }
+
+        function updateScoreboard() {
+            const sb = document.getElementById('scoreboard');
+            sb.innerHTML = '';
+            
+            document.getElementById('current-turn-name').innerText = teams[activeTeamIndex].name;
+
+            teams.forEach((t, i) => {
+                const isActive = i === activeTeamIndex;
+                const activeClasses = isActive ? 'active-team bg-white/90' : 'bg-white/60 opacity-80';
+                
+                sb.innerHTML += `
+                <div class="flex-1 rounded-xl p-2 text-center transition-all duration-300 border-2 ${t.border} ${activeClasses}">
+                    <div class="text-[1.5vh] md:text-[2vh] font-black ${t.text} truncate">${t.name}</div>
+                    <div class="text-[3vh] md:text-[4vh] font-black leading-none ${t.text}">${t.score}</div>
+                </div>`;
+            });
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('question-grid');
+            grid.innerHTML = '';
+            let allAnswered = true;
+
+            questions.forEach((q, i) => {
+                if (!q.answered) allAnswered = false;
+                
+                const btn = document.createElement('button');
+                btn.className = `btn-3d w-full h-full rounded-2xl flex items-center justify-center text-[4vh] md:text-[5vh] font-black border-4 shadow-lg ${q.answered ? 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed opacity-40' : 'bg-gradient-to-br from-pink-400 to-rose-500 border-rose-700 text-white hover:from-pink-300 hover:to-rose-400 shadow-[0_6px_0_#9f1239]'}`;
+                
+                if(!q.answered) {
+                    btn.innerHTML = `<span class="drop-shadow-md z-10">${i + 1}</span>`;
+                    btn.onclick = () => selectQuestion(i);
+                } else {
+                    btn.innerHTML = '✔️';
+                }
+                grid.appendChild(btn);
+            });
+
+            if (allAnswered && questions.length > 0) {
+                setTimeout(showEndScreen, 1000);
+            }
+        }
+
+        function selectQuestion(index) {
+            playCling();
+            playBusSound();
+            currentQuestionIndex = index;
+            isAnswering = false;
+
+            document.getElementById('screen-grid').classList.replace('flex', 'hidden');
+            document.getElementById('screen-question').classList.replace('hidden', 'flex');
+            
+            const busWrapper = document.getElementById('bus-wrapper');
+            busWrapper.className = 'w-full flex items-center justify-center transition-transform duration-700 ease-in-out bus-hidden';
+            void busWrapper.offsetWidth; // Force reflow
+            
+            const q = questions[index];
+            document.getElementById('q-number').innerText = index + 1;
+            document.getElementById('question-text').innerHTML = q.text.replace('_____', '<span class="text-blue-600 underline decoration-4 underline-offset-4 font-black">_____</span>');
+            
+            const choicesContainer = document.getElementById('choices-container');
+            choicesContainer.innerHTML = '';
+            
+            const shuffled = q.choices.map((txt, i) => ({txt, originalIndex: i})).sort(() => Math.random() - 0.5);
+            
+            shuffled.forEach((choice, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "btn-3d animate-choice bg-white hover:bg-blue-50 text-gray-800 border-4 border-blue-300 font-black text-xl md:text-3xl py-3 px-6 rounded-2xl shadow-[0_4px_0_#93c5fd] transition-colors text-left flex items-center w-full";
+                btn.style.animationDelay = `${0.4 + (idx * 0.15)}s`; 
+                btn.innerHTML = `<span class="bg-blue-100 text-blue-800 rounded-full w-8 h-8 md:w-10 md:h-10 inline-flex items-center justify-center mr-4 text-lg md:text-xl border-2 border-blue-300 flex-shrink-0">${['A','B','C'][idx]}</span> <span>${choice.txt}</span>`;
+                btn.onclick = (e) => handleAnswer(choice.originalIndex, btn, e);
+                choicesContainer.appendChild(btn);
+            });
+
+            busWrapper.classList.replace('bus-hidden', 'bus-visible');
+        }
+
+        function handleAnswer(originalIndex, btnElement, event) {
+            if (isAnswering) return;
+            isAnswering = true;
+            
+            const q = questions[currentQuestionIndex];
+            const isCorrect = (originalIndex === q.correct);
+
+            if (isCorrect) {
+                playCorrectSound();
+                createFirework(event.clientX, event.clientY);
+                createFirework(window.innerWidth/2, window.innerHeight/2);
+                
+                // Fixed: Make button turn green and stay green
+                btnElement.classList.add('correct-anim', 'bg-green-500', 'text-white', 'border-green-700');
+                btnElement.classList.remove('bg-white', 'text-gray-800', 'hover:bg-blue-50');
+                
+                questions[currentQuestionIndex].answered = true;
+                teams[activeTeamIndex].score += 1;
+
+                setTimeout(() => advanceTurnAndReturn(), 1500);
+            } else {
+                playCreepySound();
+                document.body.classList.add('bg-red-flash');
+                btnElement.classList.add('wrong-anim');
+                questions[currentQuestionIndex].answered = true;
+                
+                // Show right answer visually
+                const buttons = document.getElementById('choices-container').children;
+                for(let b of buttons) {
+                    if (q.choices[q.correct] === b.querySelector('span:last-child').innerText) {
+                        b.classList.remove('bg-white', 'border-blue-300', 'text-gray-800', 'hover:bg-blue-50');
+                        b.classList.add('bg-green-400', 'border-green-600', 'text-white');
+                    }
+                }
+
+                setTimeout(() => {
+                    document.body.classList.remove('bg-red-flash');
+                    advanceTurnAndReturn();
+                }, 2500);
+            }
+        }
+
+        function advanceTurnAndReturn() {
+            activeTeamIndex = (activeTeamIndex + 1) % teams.length;
+            updateScoreboard();
+            
+            const busWrapper = document.getElementById('bus-wrapper');
+            busWrapper.classList.replace('bus-visible', 'bus-exit');
+            
+            setTimeout(() => {
+                document.getElementById('screen-question').classList.replace('flex', 'hidden');
+                document.getElementById('screen-grid').classList.replace('hidden', 'flex');
+                renderGrid();
+            }, 600);
+        }
+
+        // --- PENALTY MODAL ---
+        function openPenaltyModal() {
+            playCling();
+            const modal = document.getElementById('penalty-modal');
+            const container = document.getElementById('penalty-buttons');
+            container.innerHTML = '';
+            
+            teams.forEach((t, i) => {
+                container.innerHTML += `<button onclick="applyPenalty(${i})" class="btn-3d flex-1 min-w-[100px] ${t.color} ${t.border} ${t.text} border-b-4 font-black text-sm md:text-lg py-2 md:py-3 rounded-xl shadow-md hover:opacity-80">${t.name}</button>`;
+            });
+            
+            modal.classList.replace('hidden', 'flex');
+        }
+
+        function applyPenalty(index) {
+            playCreepySound();
+            document.body.classList.add('bg-red-flash');
+            
+            if (index === 'ALL') {
+                teams.forEach(t => t.score -= 1);
+            } else {
+                teams[index].score -= 1;
+            }
+            
+            updateScoreboard();
+            closePenaltyModal();
+            
+            setTimeout(() => { document.body.classList.remove('bg-red-flash'); }, 300);
+        }
+
+        function closePenaltyModal() {
+            document.getElementById('penalty-modal').classList.replace('flex', 'hidden');
+        }
+
+        function showEndScreen() {
+            document.getElementById('screen-question').classList.replace('flex', 'hidden');
+            document.getElementById('screen-grid').classList.replace('flex', 'hidden');
+            document.getElementById('top-bar').classList.add('hidden');
+            document.getElementById('screen-end').classList.replace('hidden', 'flex');
+            
+            let maxScore = -999;
+            let winners = [];
+            teams.forEach(t => {
+                if (t.score > maxScore) { maxScore = t.score; winners = [t.name]; }
+                else if (t.score === maxScore) { winners.push(t.name); }
+            });
+            
+            document.getElementById('final-winner').innerText = `${winners.join(' & ')} (${maxScore} pts)`;
+            
+            setTimeout(playCorrectSound, 100);
+            setTimeout(playCorrectSound, 500);
+            
+            // Clear any old interval to prevent multiple firework loops
+            if(window.fireworkInterval) clearInterval(window.fireworkInterval);
+            window.fireworkInterval = setInterval(() => {
+                createFirework(Math.random() * window.innerWidth, Math.random() * window.innerHeight);
+            }, 800);
+        }
+    </script>
+</body>
+</html>
